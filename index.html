@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>University Rankings Visualization</title>
+    <script src="https://d3js.org/d3.v6.min.js"></script>
+    <style>
+        /* Styling for the description div */
+        
+        body {
+            background-color: rgb(113, 107, 81);
+        }
+        
+        #title {
+            position: absolute;
+            top: 20px; /* Adjust as needed */
+            left: 50%;
+            transform: translateX(-50%);
+            font-size: 24px;
+            font-weight: bold;
+            color: #333;
+        }
+        #description {
+            position: absolute;
+            top: 300px;
+            left: 20px;
+            width: 450px;
+            padding: 20px;
+            background-color: #f9f9f9;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+        }
+
+        #description h2 {
+            font-size: 18px;
+            margin-bottom: 10px;
+            color: #333;
+        }
+
+        #description p {
+            font-size: 14px;
+            color: #666;
+            line-height: 1.4;
+            margin-bottom: 15px;
+        }
+
+        #buttons {
+            margin-top: 100px;
+        }
+
+        
+        .score-button { background-color: #3498db; color: #fff; }
+        .quality-button { background-color: #2ecc71; color: #fff; }
+        .employment-button { background-color: #e74c3c; color: #fff; }
+        .publications-button { background-color: #f39c12; color: #fff; }
+        .influence-button { background-color: #9b59b6; color: #fff; }
+        /* Rest of the CSS styles */
+        .bar { fill: steelblue; }
+        .bar:hover { fill: darkorange; }
+        .country { fill: #ccc; }
+        .country:hover { fill: #ccc7a7; }
+        .tooltip {
+            position: absolute;
+            text-align: center;
+            width: 160px;
+            height: 28px;
+            padding: 2px;
+            font: 12px sans-serif;
+            background: lightsteelblue;
+            border: 1px solid #ccc;
+            border-radius: 8px;
+            pointer-events: none;
+            opacity: 0;
+        }
+        svg { display: block; margin: auto; }
+        #map { margin-top: 20px; } /* Adjust margin-top to move the map closer to the bar graph */
+        #bar { margin-top: 20px; } /* Adjust margin-top to create space between map and bar graph */
+        .axis text { font-size: 10px; } /* Adjust font size of axis labels */
+    </style>
+</head>
+<body>
+    <!-- Description div -->
+
+    <!-- Title -->
+    <div id="title">University Rankings Visualization</div>
+
+    <div id="description">
+        <h2>University Rankings Visualization</h2>
+        <p>This visualization allows you to explore university rankings based on different metrics. Click on the buttons above to switch between metrics and see the corresponding rankings on the bar graph. Click on a country on the map to view its top-ranked universities.</p>
+        <p>The visualization defaults to showing the overall score for universities in the United States. Click on a country on the map to view rankings for that country.</p>
+    </div>
+
+    <!-- Buttons -->
+    <div id="buttons">
+    <button class="score-button" onclick="updateMetric('score')">Overall Score</button>
+    <button class="quality-button" onclick="updateMetric('quality_of_education')">Quality of Education</button>
+    <button class="employment-button" onclick="updateMetric('alumni_employment')">Alumni Employment</button>
+    <button class="publications-button" onclick="updateMetric('publications')">Publications</button>
+    <button class="influence-button" onclick="updateMetric('influence')">Influence</button>
+    <!-- Additional buttons can be added as needed -->
+</div>
+    <!-- Tooltip -->
+    <div class="tooltip" id="tooltip" style="opacity: 0;"></div>
+
+    <!-- Map and Bar Graph -->
+    <svg id="map" width="800" height="450"></svg> <!-- Removed style attribute -->
+    <svg id="bar" width="800" height="450"></svg> <!-- Removed style attribute -->
+
+   
+   <!-- Information about selected country -->
+<div id="info" style="position: absolute; bottom: 20px; left: 20px; background-color: #fff; padding: 10px; border: 1px solid #ccc; border-radius: 5px; box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);">
+    <!-- Total score of the country will be inserted here dynamically -->
+</div>
+
+
+    <script>
+        const mapSvg = d3.select("#map"),
+              barSvg = d3.select("#bar"),
+              tooltip = d3.select("#tooltip"),
+              infoDiv = d3.select("#info"),
+              margin = { top: 20, right: 20, bottom: 200, left: 80 },
+              barWidth = +barSvg.attr("width") - margin.left - margin.right,
+              barHeight = +barSvg.attr("height") - margin.top - margin.bottom;
+
+        const x = d3.scaleBand().range([0, barWidth]).padding(0.1),
+              y = d3.scaleLinear().range([barHeight, 0]);
+
+        const xAxis = d3.axisBottom(x),
+              yAxis = d3.axisLeft(y);
+
+        barSvg.append("g")
+              .attr("transform", "translate(" + margin.left + "," + (barHeight + margin.top) + ")")
+              .attr("class", "x-axis");
+
+        barSvg.append("g")
+              .attr("transform", "translate(" + margin.left + "," + margin.top + ")")
+              .attr("class", "y-axis");
+        barSvg.append("text")
+    .attr("transform", "translate(" + (margin.left + barWidth / 2) + " ," + (barHeight + margin.top + 40) + ")")
+    .style("text-anchor", "middle")
+    .text("Institutions");
+
+// Append y-axis label
+barSvg.append("text")
+    .attr("transform", "rotate(-90)")
+    .attr("y", margin.left - 60)
+    .attr("x", 0 - (barHeight / 2))
+    .attr("dy", "1em")
+    .style("text-anchor", "middle")
+    .text("Score");
+
+
+        const projection = d3.geoNaturalEarth1().scale(130).translate([400, 225]);
+        const path = d3.geoPath().projection(projection);
+
+        d3.json("https://raw.githubusercontent.com/holtzy/D3-graph-gallery/master/DATA/world.geojson").then(function(worldData) {
+            mapSvg.selectAll("path")
+                  .data(worldData.features)
+                  .enter().append("path")
+                  .attr("class", "country")
+                  .attr("d", path)
+                  .on("mouseover", function(event, d) {
+                      tooltip.transition().duration(200).style("opacity", .9);
+                      tooltip.html(d.properties.name)
+                             .style("left", (event.pageX + 5) + "px")
+                             .style("top", (event.pageY - 28) + "px");
+                  })
+                  .on("mouseout", function() {
+                      tooltip.transition().duration(500).style("opacity", 0);
+                  })
+                  .on("click", function(event, d) {
+                    const countryName = getCountryName(d.properties.name);
+                    updateMetric('score', countryName); // Default to score when a country is clicked
+                    showCountryInfo(countryName);
+                  });
+        });
+
+        function getCountryName(geoName) {
+            // Create a mapping between GeoJSON names and CSV names
+            const countryMap = {
+                "England": "United Kingdom"
+                // Add more mappings as needed
+            };
+            return countryMap[geoName] || geoName; // Return the mapped name, or the original name if no mapping is found
+        }
+        let currentCountry = 'USA'; // Default country, dynamically updated on click
+
+        function updateMetric(metric, countryName) {
+            currentCountry = countryName || currentCountry; // Update or reuse the last country
+            updateBarGraph(currentCountry, metric);
+        }
+
+        function updateBarGraph(countryName, metric) {
+            metric = metric || 'score'; // Default to score if no metric is provided
+            d3.csv("cwurData.csv").then(function(data) {
+                const countryData = data.filter(d => d.country === countryName).slice(0, 5);
+                const numBars = countryData.length; 
+                x.domain(countryData.map(d => d.institution));
+                y.domain([0, d3.max(countryData, d => Number(d[metric]))]);
+                const colorScale = d3.scaleOrdinal(d3.schemeCategory10);
+                barSvg.select(".x-axis").transition().duration(300).call(xAxis);
+                barSvg.select(".y-axis").transition().duration(300).call(yAxis);
+
+                const bars = barSvg.selectAll(".bar")
+                                   .data(countryData, d => d.institution);
+
+                bars.enter()
+                    .append("rect")
+                    .merge(bars)
+                    .attr("class", "bar")
+                    .transition().duration(300)
+                    .attr("x", d => x(d.institution) + margin.left)
+                    .attr("y", d => y(Number(d[metric])) + margin.top)
+                    .attr("width", x.bandwidth())
+                    .attr("height", d => barHeight - y(Number(d[metric])))
+                    .style("fill", (_, i) => colorScale(i % numBars)); 
+                bars.exit().remove();
+                
+            });
+        }
+
+        function showCountryInfo(countryName) {
+            d3.csv("cwurData.csv").then(function(data) {
+                const countryData = data.filter(d => d.country === countryName);
+                const totalScore = countryData.reduce((sum, d) => sum + Number(d.score), 0);
+                infoDiv.html(`<p><strong>Country:</strong> ${countryName}</p><p><strong>Total Score:</strong> ${totalScore}</p>`);
+            });
+        }
+        
+        updateMetric('score', 'USA'); // Initial call to populate the graph
+    </script>
+</body>
+</html>
